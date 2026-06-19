@@ -47,7 +47,7 @@ export class EthereumListener {
         onLogs: (logs) => {
           void (async () => {
             for (const log of logs) {
-              if (log.blockNumber != null) {
+              if (log.blockNumber !== null) {
                 listenerLastBlock.set({ chain: "ethereum" }, Number(log.blockNumber));
               }
               const hashlock = log.args.hashlock!;
@@ -82,7 +82,7 @@ export class EthereumListener {
         event: ORDER_CLAIMED,
         onLogs: (logs) => {
           for (const log of logs) {
-            if (log.blockNumber != null) {
+            if (log.blockNumber !== null) {
               listenerLastBlock.set({ chain: "ethereum" }, Number(log.blockNumber));
             }
             this.log.info(
@@ -103,7 +103,7 @@ export class EthereumListener {
         event: ORDER_REFUNDED,
         onLogs: (logs) => {
           for (const log of logs) {
-            if (log.blockNumber != null) {
+            if (log.blockNumber !== null) {
               listenerLastBlock.set({ chain: "ethereum" }, Number(log.blockNumber));
             }
             this.log.info({ orderId: log.args.orderId!.toString() }, "ETH order refunded");

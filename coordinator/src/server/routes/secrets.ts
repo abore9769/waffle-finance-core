@@ -1,9 +1,35 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { Logger } from "pino";
 import type { SecretService } from "../../services/secret-service.js";
+import { makeRateLimiter, loadApiKeys, loadTrustedProxies } from "../middleware/ratelimit.js";
 
-export function secretsRoutes(secrets: SecretService): Router {
+export function secretsRoutes(secrets: SecretService, log?: Logger): Router {
   const router = Router();
+
+  const apiKeys = loadApiKeys();
+  const trustedProxies = loadTrustedProxies();
+
+  // Secret reveal is high-value: stricter window (5 reveals per IP per minute).
+  // Resolvers presenting a valid API key bypass this limit entirely.
+  const revealRateLimit = makeRateLimiter({
+    windowMs: 60_000,
+    max: 5,
+    name: "secrets/reveal",
+    log,
+    apiKeys,
+    trustedProxies
+  });
+
+  // Secret GET endpoint: 30 reads per IP per minute (lenient — it's a public read).
+  const getSecretRateLimit = makeRateLimiter({
+    windowMs: 60_000,
+    max: 30,
+    name: "secrets/get",
+    log,
+    apiKeys,
+    trustedProxies
+  });
 
   const revealSchema = z.object({
     publicId: z.string().min(1),
@@ -11,7 +37,7 @@ export function secretsRoutes(secrets: SecretService): Router {
     txHash: z.string().min(1)
   });
 
-  router.post("/secrets/reveal", async (req, res, next) => {
+  router.post("/secrets/reveal", revealRateLimit, async (req, res, next) => {
     try {
       const body = revealSchema.parse(req.body);
       await secrets.reveal(body.publicId, body.preimage, body.txHash);
@@ -29,14 +55,15 @@ export function secretsRoutes(secrets: SecretService): Router {
     }
   });
 
-  router.get("/secrets/:publicId", async (req, res, next) => {
+  router.get("/secrets/:publicId", getSecretRateLimit, async (req, res, next) => {
     try {
-      const preimage = await secrets.get(req.params.publicId);
+      const publicId = req.params["publicId"] ?? "";
+      const preimage = await secrets.get(publicId);
       if (!preimage) {
         res.status(404).json({ error: "not_revealed" });
         return;
       }
-      res.json({ publicId: req.params.publicId, preimage });
+      res.json({ publicId, preimage });
     } catch (err) {
       next(err);
     }

@@ -100,7 +100,7 @@ export class SolanaListener {
    */
   private handleLogs(sig: string, logs: string[]): void {
     let eventType: string | null = null;
-    let payload: Record<string, unknown> = {};
+    const payload: Record<string, unknown> = {};
 
     for (const line of logs) {
       if (line.includes("OrderCreated"))  { eventType = "OrderCreated"; }
@@ -126,7 +126,7 @@ export class SolanaListener {
       const orderId  = payload.orderId  as string | undefined;
       const timelock = payload.timelock as number | undefined;
 
-      if (!hashlock || !orderId || timelock == null) {
+      if (!hashlock || !orderId || timelock === null || timelock === undefined) {
         this.log.warn({ sig, payload }, "OrderCreated missing required fields — cannot record src lock");
         return;
       }

@@ -43,8 +43,10 @@ export function createApp(deps: AppDeps): Express {
 
   app.use(healthRoutes());
   app.use(metricsRoutes());
-  app.use("/api", ordersRoutes(deps.orders));
-  app.use("/api", secretsRoutes(deps.secrets));
+  // Pass the logger into route factories so rate-limit abuse events are
+  // surfaced through the application's structured log stream.
+  app.use("/api", ordersRoutes(deps.orders, deps.log));
+  app.use("/api", secretsRoutes(deps.secrets, deps.log));
   app.use("/api", quotesRoutes(deps.quotes));
 
   // Final error handler — never leak a stack trace to clients.
