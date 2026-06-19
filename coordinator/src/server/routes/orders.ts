@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
-import type { Request, Response, NextFunction } from "express";
+import type { Logger } from "pino";
 import type { OrderRow } from "../../persistence/orders-repo.js";
-import { announceSchema, OrderService, OrderValidationError } from "../../services/order-service.js";
+import type { OrderService } from "../../services/order-service.js";
+import { announceSchema, OrderValidationError } from "../../services/order-service.js";
+import { makeRateLimiter, loadApiKeys, loadTrustedProxies } from "../middleware/ratelimit.js";
 
 function serialiseOrder(order: OrderRow | null) {
   if (!order) return null;
@@ -43,32 +45,22 @@ function serialiseOrder(order: OrderRow | null) {
   };
 }
 
-/** Simple in-process rate limiter: max `limit` requests per `windowMs` per IP. */
-function makeRateLimiter(windowMs: number, limit: number) {
-  const hits = new Map<string, { count: number; resetAt: number }>();
-  return function rateLimiter(req: Request, res: Response, next: NextFunction): void {
-    const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim()
-      ?? req.socket.remoteAddress
-      ?? "unknown";
-    const now = Date.now();
-    const entry = hits.get(ip);
-    if (!entry || now > entry.resetAt) {
-      hits.set(ip, { count: 1, resetAt: now + windowMs });
-      return next();
-    }
-    entry.count += 1;
-    if (entry.count > limit) {
-      res.status(429).json({ error: "too_many_requests", message: "Rate limit exceeded. Try again shortly." });
-      return;
-    }
-    next();
-  };
-}
-
-const announceRateLimit = makeRateLimiter(60_000, 20); // 20 announces per IP per minute
-
-export function ordersRoutes(orders: OrderService): Router {
+export function ordersRoutes(orders: OrderService, log?: Logger): Router {
   const router = Router();
+
+  const apiKeys = loadApiKeys();
+  const trustedProxies = loadTrustedProxies();
+
+  // 20 announces per IP per minute — rate is intentionally conservative so
+  // that legitimate resolvers are not impacted during normal operations.
+  const announceRateLimit = makeRateLimiter({
+    windowMs: 60_000,
+    max: 20,
+    name: "orders/announce",
+    log,
+    apiKeys,
+    trustedProxies
+  });
 
   router.post("/orders/announce", announceRateLimit, async (req, res, next) => {
     try {
