@@ -149,13 +149,13 @@ export class OrderService {
     ordersTotal.inc({ status: "dst_locked" });
   }
 
-  async recordSecret(publicId: string, preimage: string, txHash: string): Promise<void> {
+  async recordSecret(publicId: string, preimage: string, txHash: string, encVersion: number | null = null): Promise<void> {
     const order = await this.repo.findByPublicId(publicId);
     if (!order) throw new OrderValidationError(`unknown order ${publicId}`);
     if (!canTransition(order.status, "secret_revealed") && order.status !== "secret_revealed") {
       throw new OrderValidationError(`cannot record secret from status ${order.status}`);
     }
-    await this.repo.recordSecretRevealed({ publicId, preimage, txHash });
+    await this.repo.recordSecretRevealed({ publicId, preimage, txHash, encVersion });
     this.log.info({ publicId }, "secret recorded");
     ordersTotal.inc({ status: "secret_revealed" });
   }

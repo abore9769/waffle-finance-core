@@ -40,7 +40,13 @@ CREATE TABLE IF NOT EXISTS orders (
     dst_timelock          INTEGER,
 
     -- Secret tracking. preimage stays NULL until revealed.
+    -- When encryption is enabled (SECRET_STORAGE_KEY is set), preimage holds
+    -- a base64url-encoded AES-256-GCM blob instead of a raw hex string.
+    -- The enc_version column tracks the storage format:
+    --   NULL  → plaintext (legacy / encryption disabled)
+    --   1     → AES-256-GCM encrypted blob (see coordinator/src/crypto/secret-cipher.ts)
     preimage              TEXT,
+    preimage_enc_version  INTEGER,
     secret_revealed_tx    TEXT,
 
     -- Resolver that filled the destination side (if any).

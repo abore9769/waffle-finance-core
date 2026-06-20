@@ -47,6 +47,8 @@ export interface OrderRow {
   dstLockBlock: number | null;
   dstTimelock: number | null;
   preimage: string | null;
+  /** NULL = plaintext, 1 = AES-256-GCM encrypted blob. */
+  preimageEncVersion: number | null;
   secretRevealedTx: string | null;
   resolverAddress: string | null;
   createdAt: number;
@@ -91,6 +93,7 @@ interface OrderDbRow {
   dst_lock_block: number | null;
   dst_timelock: number | null;
   preimage: string | null;
+  preimage_enc_version: number | null;
   secret_revealed_tx: string | null;
   resolver_address: string | null;
   created_at: number;
@@ -122,6 +125,7 @@ function rowToOrder(r: OrderDbRow): OrderRow {
     dstLockBlock: r.dst_lock_block,
     dstTimelock: r.dst_timelock,
     preimage: r.preimage,
+    preimageEncVersion: r.preimage_enc_version ?? null,
     secretRevealedTx: r.secret_revealed_tx,
     resolverAddress: r.resolver_address,
     createdAt: r.created_at,
@@ -196,6 +200,7 @@ export class OrdersRepository {
     this.updateSecret = db.prepare(`
       UPDATE orders SET
         preimage = :preimage,
+        preimage_enc_version = :encVersion,
         secret_revealed_tx = :txHash,
         status = 'secret_revealed',
         updated_at = CAST(strftime('%s','now') AS INTEGER)
@@ -294,7 +299,13 @@ export class OrdersRepository {
     publicId: string;
     preimage: string;
     txHash: string;
+    encVersion?: number | null;
   }): Promise<void> {
-    await this.run(this.updateSecret, input);
+    await this.run(this.updateSecret, {
+      publicId: input.publicId,
+      preimage: input.preimage,
+      txHash: input.txHash,
+      encVersion: input.encVersion ?? null
+    });
   }
 }

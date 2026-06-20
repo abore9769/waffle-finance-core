@@ -19,7 +19,7 @@ async function main(): Promise<void> {
   const db = await openDatabase(cfg.databaseUrl);
   const repo = new OrdersRepository(db);
   const orders = new OrderService(repo, log);
-  const secrets = new SecretService(orders, log);
+  const secrets = new SecretService(orders, log, cfg.secretStorageKey ?? undefined);
   const quotes = new QuoteService(log);
 
   const reconciler = new Reconciler(cfg, orders, log);

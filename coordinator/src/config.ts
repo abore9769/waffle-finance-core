@@ -15,6 +15,28 @@ const configSchema = z.object({
   logLevel: z.enum(["trace", "debug", "info", "warn", "error"]).default("info"),
   corsOrigin: z.string().default("*"),
   pollIntervalMs: z.coerce.number().int().positive().default(15_000),
+  /**
+   * Optional 32-byte key used to encrypt preimages at rest with AES-256-GCM.
+   * Accepted formats: 64-character hex string, or 44-character base64 string.
+   *
+   * When set, the coordinator encrypts every new preimage before persisting
+   * it and decrypts on retrieval.  Existing plaintext rows are decrypted
+   * transparently without re-encryption (see SecretService for details).
+   *
+   * When absent, preimages are stored as raw hex strings (legacy behaviour).
+   *
+   * Set via environment variable:  SECRET_STORAGE_KEY=<64-hex-chars>
+   *
+   * Key management:
+   *   - Generate with:  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   *   - Store in a secrets manager (AWS Secrets Manager, HashiCorp Vault, etc.).
+   *   - Back up alongside your database backup — lost key = unrecoverable preimages.
+   *   - For key rotation: update the env var and run the re-encryption migration.
+   */
+  secretStorageKey: z
+    .string()
+    .optional()
+    .transform((v) => (v && v.trim().length > 0 ? v.trim() : undefined)),
   ethereum: z.object({
     rpcUrl: z.string().url(),
     chainId: z.number().int(),
@@ -58,6 +80,7 @@ export function loadConfig(): CoordinatorConfig {
     logLevel: process.env.LOG_LEVEL ?? "info",
     corsOrigin: process.env.CORS_ORIGIN ?? "*",
     pollIntervalMs: process.env.COORDINATOR_POLL_INTERVAL_MS ?? "15000",
+    secretStorageKey: process.env.SECRET_STORAGE_KEY,
     ethereum: {
       rpcUrl: resolveEthereumRpcUrl(isMainnet ? "mainnet" : "testnet"),
       chainId: isMainnet ? 1 : 11_155_111,

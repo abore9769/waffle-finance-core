@@ -179,7 +179,9 @@ async function openPostgresDatabase(url: string): Promise<PostgresDatabase> {
     // Add migrations in order.
     "001_initial.sql",
     // Use PostgreSQL-specific Solana migration if available, otherwise fallback
-    "002_solana_support_postgres.sql"
+    "002_solana_support_postgres.sql",
+    // Adds preimage_enc_version column for AES-256-GCM encryption at rest.
+    "003_secret_encryption.sql"
   ];
 
   for (const file of migrationFiles) {
