@@ -115,6 +115,14 @@ contract HTLCEscrow is IHTLCEscrow, ReentrancyGuard {
     error ResolverNotAuthorised();
     error NativeTransferFailed();
     error NoPendingWithdrawal();
+    /// @notice The ERC20 `token` address is not a deployed contract.
+    error InvalidToken();
+    /// @notice The caller has not approved this escrow to move at least
+    ///         `required` tokens. `allowance` is the current allowance.
+    error InsufficientAllowance(uint256 allowance, uint256 required);
+    /// @notice The caller's token balance is below the order `amount`.
+    ///         `balance` is the caller's current balance.
+    error InsufficientBalance(uint256 balance, uint256 required);
 
     // ---------------------------------------------------------------
     // Construction
@@ -157,9 +165,24 @@ contract HTLCEscrow is IHTLCEscrow, ReentrancyGuard {
             // Native ETH: msg.value must cover amount + safetyDeposit exactly.
             if (msg.value != amount + safetyDeposit) revert InvalidValue();
         } else {
-            // ERC20: msg.value must be exactly safetyDeposit (in ETH) +
-            // we pull `amount` of the token from msg.sender.
+            // ERC20: the safety deposit is paid in ETH, so msg.value must be
+            // exactly `safetyDeposit`; the token `amount` is pulled from the
+            // caller via transferFrom.
             if (msg.value != safetyDeposit) revert InvalidValue();
+
+            // Validate the ERC20 flow up-front so a misconfigured create fails
+            // with a targeted reason rather than an opaque SafeERC20 revert
+            // (or a confusing "call to non-contract") deep inside the transfer.
+            if (token.code.length == 0) revert InvalidToken();
+
+            uint256 allowed = IERC20(token).allowance(msg.sender, address(this));
+            if (allowed < amount) revert InsufficientAllowance(allowed, amount);
+
+            uint256 balance = IERC20(token).balanceOf(msg.sender);
+            if (balance < amount) revert InsufficientBalance(balance, amount);
+
+            // Atomicity is unchanged: funds are still pulled here, and a token
+            // that lies about allowance/balance is still caught by SafeERC20.
             IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
         }
 

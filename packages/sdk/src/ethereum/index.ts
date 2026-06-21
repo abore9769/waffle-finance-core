@@ -71,6 +71,29 @@ export class EthereumHTLCClient {
     return this.walletClient;
   }
 
+  /**
+   * Create (fund) an HTLC order on the escrow.
+   *
+   * Transaction value (`msg.value`) semantics enforced by the contract:
+   *
+   * - **Native ETH** (`token === address(0)`): `value` must equal
+   *   `amount + safetyDeposit` exactly. This wrapper computes it for you.
+   * - **ERC20** (`token` is a token address): `value` must equal the
+   *   `safetyDeposit` only (the deposit is always paid in ETH); the token
+   *   `amount` is pulled via `transferFrom`. **The caller MUST approve this
+   *   escrow for at least `amount` of `token` before calling** — otherwise
+   *   the contract reverts with `InsufficientAllowance(allowance, required)`.
+   *
+   * The contract validates the ERC20 flow up-front and reverts with a
+   * targeted reason rather than an opaque token failure:
+   * - `InvalidToken` — `token` is not a deployed contract.
+   * - `InsufficientAllowance(allowance, required)` — approval too small.
+   * - `InsufficientBalance(balance, required)` — caller can't cover `amount`.
+   * - `InvalidValue` — `msg.value` did not match the rules above.
+   *
+   * These are decodable via {@link HTLC_ESCROW_ABI}; the `simulateContract`
+   * call below surfaces them before any gas is spent on-chain.
+   */
   async createOrder(input: CreateOrderInput): Promise<{ txHash: Hex; orderId: bigint }> {
     const wallet = this.requireWallet();
     const account = wallet.account;

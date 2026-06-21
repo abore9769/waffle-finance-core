@@ -182,6 +182,124 @@ describe("HTLCEscrow v2", () => {
 
       expect(await token.balanceOf(await escrow.getAddress())).to.equal(AMOUNT);
     });
+
+    it("reverts with InsufficientAllowance when the ERC20 approval is too small", async () => {
+      const [sender, beneficiary] = await ethers.getSigners();
+      const escrow = await deployEscrow();
+      const token = await deployToken();
+      const hashlock = ethers.sha256(randomBytes32());
+
+      // Approve less than the order amount.
+      const approved = AMOUNT - 1n;
+      await token.connect(sender).approve(await escrow.getAddress(), approved);
+
+      await expect(
+        escrow.connect(sender).createOrder(
+          beneficiary.address,
+          sender.address,
+          await token.getAddress(),
+          AMOUNT,
+          SAFETY_DEPOSIT,
+          hashlock,
+          TIMELOCK,
+          { value: SAFETY_DEPOSIT }
+        )
+      )
+        .to.be.revertedWithCustomError(escrow, "InsufficientAllowance")
+        .withArgs(approved, AMOUNT);
+    });
+
+    it("reverts with InsufficientAllowance when there is no approval at all", async () => {
+      const [sender, beneficiary] = await ethers.getSigners();
+      const escrow = await deployEscrow();
+      const token = await deployToken();
+      const hashlock = ethers.sha256(randomBytes32());
+
+      await expect(
+        escrow.connect(sender).createOrder(
+          beneficiary.address,
+          sender.address,
+          await token.getAddress(),
+          AMOUNT,
+          SAFETY_DEPOSIT,
+          hashlock,
+          TIMELOCK,
+          { value: SAFETY_DEPOSIT }
+        )
+      )
+        .to.be.revertedWithCustomError(escrow, "InsufficientAllowance")
+        .withArgs(0, AMOUNT);
+    });
+
+    it("reverts with InsufficientBalance when allowance is sufficient but balance is not", async () => {
+      const [, beneficiary, poorSigner] = await ethers.getSigners();
+      const escrow = await deployEscrow();
+      const token = await deployToken();
+      const hashlock = ethers.sha256(randomBytes32());
+
+      // poorSigner holds no tokens but still approves the escrow: allowance
+      // passes, the balance check is what trips.
+      await token.connect(poorSigner).approve(await escrow.getAddress(), AMOUNT);
+      expect(await token.balanceOf(poorSigner.address)).to.equal(0);
+
+      await expect(
+        escrow.connect(poorSigner).createOrder(
+          beneficiary.address,
+          poorSigner.address,
+          await token.getAddress(),
+          AMOUNT,
+          SAFETY_DEPOSIT,
+          hashlock,
+          TIMELOCK,
+          { value: SAFETY_DEPOSIT }
+        )
+      )
+        .to.be.revertedWithCustomError(escrow, "InsufficientBalance")
+        .withArgs(0, AMOUNT);
+    });
+
+    it("reverts with InvalidToken when the token address is not a contract", async () => {
+      const [sender, beneficiary] = await ethers.getSigners();
+      const escrow = await deployEscrow();
+      const hashlock = ethers.sha256(randomBytes32());
+      // An EOA address has no contract code.
+      const notAToken = ethers.Wallet.createRandom().address;
+
+      await expect(
+        escrow.connect(sender).createOrder(
+          beneficiary.address,
+          sender.address,
+          notAToken,
+          AMOUNT,
+          SAFETY_DEPOSIT,
+          hashlock,
+          TIMELOCK,
+          { value: SAFETY_DEPOSIT }
+        )
+      ).to.be.revertedWithCustomError(escrow, "InvalidToken");
+    });
+
+    it("reverts with InvalidValue when msg.value != safetyDeposit for an ERC20 order", async () => {
+      const [sender, beneficiary] = await ethers.getSigners();
+      const escrow = await deployEscrow();
+      const token = await deployToken();
+      const hashlock = ethers.sha256(randomBytes32());
+
+      await token.connect(sender).approve(await escrow.getAddress(), AMOUNT);
+
+      await expect(
+        escrow.connect(sender).createOrder(
+          beneficiary.address,
+          sender.address,
+          await token.getAddress(),
+          AMOUNT,
+          SAFETY_DEPOSIT,
+          hashlock,
+          TIMELOCK,
+          { value: SAFETY_DEPOSIT + 1n } // wrong: ERC20 deposit must be exact
+        )
+      ).to.be.revertedWithCustomError(escrow, "InvalidValue");
+    });
   });
 
   describe("claimOrder", () => {

@@ -90,5 +90,25 @@ export const HTLC_ESCROW_ABI = [
       { name: "amount", type: "uint256", indexed: false },
       { name: "safetyDeposit", type: "uint256", indexed: false }
     ]
+  },
+  // Custom errors — included so viem can decode targeted createOrder revert
+  // reasons (e.g. surface an "approve the escrow first" hint to the user).
+  { type: "error", name: "InvalidValue", inputs: [] },
+  { type: "error", name: "InvalidToken", inputs: [] },
+  {
+    type: "error",
+    name: "InsufficientAllowance",
+    inputs: [
+      { name: "allowance", type: "uint256" },
+      { name: "required", type: "uint256" }
+    ]
+  },
+  {
+    type: "error",
+    name: "InsufficientBalance",
+    inputs: [
+      { name: "balance", type: "uint256" },
+      { name: "required", type: "uint256" }
+    ]
   }
 ] as const;
