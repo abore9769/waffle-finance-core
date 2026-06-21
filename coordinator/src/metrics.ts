@@ -12,6 +12,15 @@ export const ordersTotal = new Counter({
   registers: [registry]
 });
 
+/** Database query duration histogram */
+export const dbQueryDuration = new Histogram({
+  name: "coordinator_db_query_duration_seconds",
+  help: "Duration of database queries in seconds",
+  labelNames: ["operation"] as const,
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5],
+  registers: [registry]
+});
+
 /** Last block number seen by each listener */
 export const listenerLastBlock = new Gauge({
   name: "coordinator_listener_last_block",
