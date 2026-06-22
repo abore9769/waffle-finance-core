@@ -99,6 +99,22 @@ async function seedOrder(orders: OrderService, hashlock = HASHLOCK) {
   });
 }
 
+async function seedStellarOrder(orders: OrderService, hashlock = HASHLOCK) {
+  return orders.announce({
+    direction: "xlm_to_eth",
+    hashlock,
+    srcChain: "stellar",
+    srcAddress: VALID_STELLAR_ADDR,
+    srcAsset: "native",
+    srcAmount: "100000000",
+    srcSafetyDeposit: "0",
+    dstChain: "ethereum",
+    dstAddress: VALID_ETH_ADDR,
+    dstAsset: "native",
+    dstAmount: "1000000000000000000"
+  });
+}
+
 // Tests
 describe("EthereumListener", () => {
   let orders: OrderService;
@@ -157,12 +173,14 @@ describe("EthereumListener", () => {
 
     // Emit event first time
     await mockWatchEventCallback!([logPayload]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
     let updated = await orders.get(order.publicId);
     expect(updated?.status).toBe("src_locked");
     expect(updated?.srcOrderId).toBe("20");
 
     // Emit duplicate event
     await mockWatchEventCallback!([logPayload]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
     updated = await orders.get(order.publicId);
     expect(updated?.status).toBe("src_locked"); // Remains correct
     expect(updated?.srcOrderId).toBe("20");
@@ -184,12 +202,14 @@ describe("EthereumListener", () => {
 
     // 1. Lock the order source leg
     await mockWatchEventCallback!([logPayload]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
     let updated = await orders.get(order.publicId);
     expect(updated?.status).toBe("src_locked");
 
     // 2. Simulate reorg (event removed)
     const reorgPayload = { ...logPayload, removed: true };
     await mockWatchEventCallback!([reorgPayload]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
     // 3. Verify order rolled back to announced
     updated = await orders.get(order.publicId);
@@ -222,6 +242,7 @@ describe("EthereumListener", () => {
     ];
 
     await mockWatchEventCallback!(logs);
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
     const updated1 = await orders.get(order1.publicId);
     const updated2 = await orders.get(order2.publicId);
@@ -311,7 +332,7 @@ describe("SorobanListener", () => {
   });
 
   it("processes claim and refund events to advance order states", async () => {
-    const order = await seedOrder(orders);
+    const order = await seedStellarOrder(orders);
     
     // Lock source leg first
     await orders.recordSrcLock({
@@ -345,7 +366,7 @@ describe("SorobanListener", () => {
     // Reset database state back to src_locked and simulate refund event
     listener.stop();
     const cleanOrders = await freshOrders();
-    const cleanOrder = await seedOrder(cleanOrders);
+    const cleanOrder = await seedStellarOrder(cleanOrders);
     await cleanOrders.recordSrcLock({
       publicId: cleanOrder.publicId,
       orderId: "300",
