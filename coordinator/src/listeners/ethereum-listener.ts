@@ -3,7 +3,7 @@ import { sepolia, mainnet } from "viem/chains";
 import type { Logger } from "pino";
 import type { CoordinatorConfig } from "../config.js";
 import type { OrderService } from "../services/order-service.js";
-import { listenerLastBlock } from "../metrics.js";
+import { observeListenerEventProcessing, recordListenerProgress } from "../metrics.js";
 
 const ORDER_CREATED = parseAbiItem(
   "event OrderCreated(uint256 indexed orderId, address indexed sender, address indexed beneficiary, address token, uint256 amount, uint256 safetyDeposit, bytes32 hashlock, uint64 timelock)"
@@ -46,9 +46,10 @@ export class EthereumListener {
         event: ORDER_CREATED,
         onLogs: (logs) => {
           void (async () => {
+            const startedAt = Date.now();
             for (const log of logs) {
               if (log.blockNumber !== null) {
-                listenerLastBlock.set({ chain: "ethereum" }, Number(log.blockNumber));
+                recordListenerProgress("ethereum", Number(log.blockNumber));
               }
               const hashlock = log.args.hashlock!;
               try {
@@ -71,6 +72,7 @@ export class EthereumListener {
                 this.log.warn({ err, hashlock }, "could not record src lock");
               }
             }
+            observeListenerEventProcessing("ethereum", "OrderCreated", startedAt);
           })();
         }
       })
@@ -81,9 +83,10 @@ export class EthereumListener {
         address,
         event: ORDER_CLAIMED,
         onLogs: (logs) => {
+          const startedAt = Date.now();
           for (const log of logs) {
             if (log.blockNumber !== null) {
-              listenerLastBlock.set({ chain: "ethereum" }, Number(log.blockNumber));
+              recordListenerProgress("ethereum", Number(log.blockNumber));
             }
             this.log.info(
               { orderId: log.args.orderId!.toString(), preimage: log.args.preimage },
@@ -93,6 +96,7 @@ export class EthereumListener {
             // /secrets/reveal. The listener could also push it forward if it
             // can match the on-chain order id to a coordinator order.
           }
+          observeListenerEventProcessing("ethereum", "OrderClaimed", startedAt);
         }
       })
     );
@@ -102,12 +106,14 @@ export class EthereumListener {
         address,
         event: ORDER_REFUNDED,
         onLogs: (logs) => {
+          const startedAt = Date.now();
           for (const log of logs) {
             if (log.blockNumber !== null) {
-              listenerLastBlock.set({ chain: "ethereum" }, Number(log.blockNumber));
+              recordListenerProgress("ethereum", Number(log.blockNumber));
             }
             this.log.info({ orderId: log.args.orderId!.toString() }, "ETH order refunded");
           }
+          observeListenerEventProcessing("ethereum", "OrderRefunded", startedAt);
         }
       })
     );
